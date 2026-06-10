@@ -1,0 +1,11 @@
+{
+  "name": "same-name-memory-map",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "verify": "node tools/verify.mjs",
+    "start": "node tools/serve.mjs"
+  }
+}
