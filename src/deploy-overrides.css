@@ -110,23 +110,24 @@ body.split-home {
 }
 
 body.presentation-only {
-  overflow: hidden !important;
   background: #f6efe3;
 }
 
-body.presentation-only #imageSlideDeck,
-body.presentation-only #mapMode {
+body.presentation-only #mapMode,
+body.presentation-only #map-section,
+body.presentation-only #slideMode {
   display: none !important;
 }
 
-body.presentation-only #slideMode {
-  display: grid !important;
-  width: 100vw !important;
-  min-height: 100vh !important;
+body.presentation-only #imageSlideDeck {
+  display: flex !important;
 }
 
-body.presentation-only #slideMode.hidden {
-  display: grid !important;
+body.presentation-only #imageDeckSkipToMap,
+body.presentation-only #imageDeckMapCta,
+body.presentation-only .image-deck-help,
+body.presentation-only #imageDeckDots .image-deck-dot:last-child {
+  display: none !important;
 }
 
 #mapMode,

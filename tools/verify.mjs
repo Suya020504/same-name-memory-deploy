@@ -149,6 +149,49 @@ async function verifyMobile(port) {
   return mobile;
 }
 
+async function verifyPresentation(port) {
+  const page = await createPage(port, `${baseUrl}/presentation.html?verify=presentation`);
+  const client = createClient(page.webSocketDebuggerUrl);
+  await client.open();
+  await client.send("Page.enable");
+  await client.send("Runtime.enable");
+  await new Promise((resolve) => setTimeout(resolve, 6500));
+
+  const before = await evaluate(client, `({
+    title: document.title,
+    bodyClass: document.body.className,
+    deckVisible: getComputedStyle(document.querySelector('#imageSlideDeck')).display !== 'none',
+    slideModeHidden: getComputedStyle(document.querySelector('#slideMode')).display === 'none',
+    mapHidden: getComputedStyle(document.querySelector('#mapMode')).display === 'none',
+    skipHidden: getComputedStyle(document.querySelector('#imageDeckSkipToMap')).display === 'none',
+    ctaHidden: getComputedStyle(document.querySelector('#imageDeckMapCta')).display === 'none',
+    counter: document.querySelector('#imageDeckCounter')?.innerText || '',
+    visibleDots: Array.from(document.querySelectorAll('#imageDeckDots .image-deck-dot')).filter((dot) => getComputedStyle(dot).display !== 'none' && !dot.hidden).length,
+    imageWidth: document.querySelector('#imageDeckSlideImage')?.naturalWidth || 0,
+    overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth
+  })`);
+
+  await evaluate(client, `new Promise(async (resolve) => {
+    const next = document.querySelector('#imageDeckNext');
+    for (let i = 0; i < 12; i++) {
+      next?.click();
+      await new Promise((done) => setTimeout(done, 140));
+    }
+    resolve(true);
+  })`);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  const afterNext = await evaluate(client, `({
+    counter: document.querySelector('#imageDeckCounter')?.innerText || '',
+    ctaHidden: getComputedStyle(document.querySelector('#imageDeckMapCta')).display === 'none',
+    mapVisibleClass: document.querySelector('#mapMode')?.classList.contains('visible') || false,
+    imageHidden: document.querySelector('#imageDeckSlideImage')?.hidden || false
+  })`);
+  client.close();
+
+  return { before, afterNext };
+}
+
 const port = await freePort();
 await rm(profileDir, { recursive: true, force: true });
 
@@ -165,11 +208,26 @@ const chrome = spawn(chromePath, [
 try {
   await waitForJson(port);
   const result = {
+    presentation: await verifyPresentation(port),
     desktop: await verifyDesktop(port),
     mobile: await verifyMobile(port)
   };
 
   const failures = [];
+  if (!result.presentation.before.bodyClass.includes("presentation-only")) failures.push("presentation class");
+  if (!result.presentation.before.deckVisible) failures.push("presentation deck");
+  if (!result.presentation.before.slideModeHidden) failures.push("presentation slide mode hidden");
+  if (!result.presentation.before.mapHidden) failures.push("presentation map hidden");
+  if (!result.presentation.before.skipHidden) failures.push("presentation skip hidden");
+  if (!result.presentation.before.ctaHidden) failures.push("presentation map cta hidden");
+  if (!result.presentation.before.counter.includes("/ 10")) failures.push("presentation counter");
+  if (result.presentation.before.visibleDots !== 10) failures.push("presentation visible dots");
+  if (result.presentation.before.imageWidth < 1) failures.push("presentation image not loaded");
+  if (result.presentation.before.overflowX) failures.push("presentation horizontal overflow");
+  if (!result.presentation.afterNext.counter.includes("10 / 10")) failures.push("presentation final slide clamp");
+  if (!result.presentation.afterNext.ctaHidden) failures.push("presentation map cta after next");
+  if (result.presentation.afterNext.mapVisibleClass) failures.push("presentation map opened");
+  if (result.presentation.afterNext.imageHidden) failures.push("presentation final image hidden");
   if (result.desktop.before.title !== "같은 이름, 다른 기억 — 지도 전용") failures.push("desktop title");
   if (!result.desktop.before.mapVisible) failures.push("desktop map mode");
   if (result.desktop.before.groupCards < 1) failures.push("desktop group cards");
